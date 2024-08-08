@@ -141,3 +141,103 @@ CREATE TABLE ProfesorApoderado (
     FOREIGN KEY (ID_profesor) REFERENCES Profesor(ID_usuario),
     FOREIGN KEY (ID_apoderado) REFERENCES Apoderado(ID_usuario)
 );
+
+-- Creación de vistas
+
+CREATE VIEW VistaCalificacionesAlumnos AS
+SELECT
+    Alumno.ID_usuario AS ID_Alumno,
+    Usuario.username AS Nombre_Alumno,
+    Asignatura.nombre AS Nombre_Asignatura,
+    Evaluacion.titulo AS Evaluacion,
+    Calificacion.calificacion AS Calificacion,
+    Calificacion.comentario AS Comentario,
+    Profesor.ID_usuario AS ID_Profesor,
+    (SELECT username FROM Usuario WHERE Usuario.ID_usuario = Profesor.ID_usuario) AS Nombre_Profesor
+FROM
+    Calificacion
+    INNER JOIN Alumno ON Calificacion.ID_usuario = Alumno.ID_usuario
+    INNER JOIN Evaluacion ON Calificacion.ID_evaluacion = Evaluacion.ID_evaluacion
+    INNER JOIN Asignatura ON Evaluacion.ID_asignatura = Asignatura.ID_asignatura
+    INNER JOIN RegistroAsignatura ON Asignatura.ID_asignatura = RegistroAsignatura.ID_asignatura
+    INNER JOIN Profesor ON RegistroAsignatura.ID_usuario = Profesor.ID_usuario;
+
+CREATE VIEW VistaAsistenciaAlumnos AS
+SELECT
+    Alumno.ID_usuario AS ID_Alumno,
+    Usuario.username AS Nombre_Alumno,
+    Asistencia.dia AS Dia,
+    Asistencia.jornada AS Jornada,
+    Asistencia.estado AS Estado,
+    Justificacion.mensaje AS Justificacion
+FROM
+    Asistencia
+    LEFT JOIN Justificacion ON Asistencia.ID_asistencia = AsistenciaJustificacion.ID_asistencia
+    LEFT JOIN AsistenciaJustificacion ON Justificacion.ID_justificacion = AsistenciaJustificacion.ID_justificacion
+    INNER JOIN Alumno ON Asistencia.ID_alumno = Alumno.ID_usuario
+    INNER JOIN Usuario ON Alumno.ID_usuario = Usuario.ID_usuario;
+
+-- Creación de funciones
+
+CREATE FUNCTION CalcularPromedioAlumno(ID_Alumno INTEGER)
+RETURNS FLOAT
+DETERMINISTIC
+BEGIN
+    DECLARE promedio FLOAT;
+    SELECT AVG(calificacion) INTO promedio
+    FROM Calificacion
+    WHERE ID_usuario = ID_Alumno;
+    RETURN promedio;
+END;
+
+CREATE FUNCTION ObtenerEstadoAsistencia(ID_Alumno INTEGER, Fecha DATE)
+RETURNS VARCHAR(2)
+DETERMINISTIC
+BEGIN
+    DECLARE estado_asistencia VARCHAR(2);
+    SELECT estado INTO estado_asistencia
+    FROM Asistencia
+    WHERE ID_alumno = ID_Alumno AND dia = Fecha;
+    RETURN estado_asistencia;
+END;
+
+-- Creación de stored procedures
+
+CREATE PROCEDURE RegistrarCalificacion(
+    IN ID_Evaluacion INTEGER,
+    IN ID_Usuario INTEGER,
+    IN Comentario VARCHAR(255),
+    IN Calificacion FLOAT
+)
+BEGIN
+    INSERT INTO Calificacion (ID_evaluacion, ID_usuario, comentario, calificacion)
+    VALUES (ID_Evaluacion, ID_Usuario, Comentario, Calificacion);
+END;
+
+CREATE PROCEDURE ActualizarAsistencia(
+    IN ID_Asistencia INTEGER,
+    IN Estado ENUM('P', 'A', 'R')
+)
+BEGIN
+    UPDATE Asistencia
+    SET estado = Estado
+    WHERE ID_asistencia = ID_Asistencia;
+END;
+
+-- Creación de triggers
+
+CREATE TRIGGER ActualizarFechaUltimaModificacionAnuncio
+AFTER UPDATE ON Anuncio
+FOR EACH ROW
+BEGIN
+    SET NEW.last_updated = CURRENT_TIMESTAMP;
+END;
+
+CREATE TRIGGER AntesDeInsertarCalificacion
+BEFORE INSERT ON Calificacion
+FOR EACH ROW
+BEGIN
+    IF NEW.calificacion < 1 OR NEW.calificacion > 7 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La calificación debe estar entre 1 y 7.';
+    END IF;
+END;
