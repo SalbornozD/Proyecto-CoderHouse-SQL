@@ -153,14 +153,16 @@ SELECT
     Calificacion.calificacion AS Calificacion,
     Calificacion.comentario AS Comentario,
     Profesor.ID_usuario AS ID_Profesor,
-    (SELECT username FROM Usuario WHERE Usuario.ID_usuario = Profesor.ID_usuario) AS Nombre_Profesor
+    UsuarioProfesor.username AS Nombre_Profesor
 FROM
     Calificacion
     INNER JOIN Alumno ON Calificacion.ID_usuario = Alumno.ID_usuario
     INNER JOIN Evaluacion ON Calificacion.ID_evaluacion = Evaluacion.ID_evaluacion
     INNER JOIN Asignatura ON Evaluacion.ID_asignatura = Asignatura.ID_asignatura
     INNER JOIN RegistroAsignatura ON Asignatura.ID_asignatura = RegistroAsignatura.ID_asignatura
-    INNER JOIN Profesor ON RegistroAsignatura.ID_usuario = Profesor.ID_usuario;
+    INNER JOIN Profesor ON RegistroAsignatura.ID_usuario = Profesor.ID_usuario
+    INNER JOIN Usuario AS UsuarioAlumno ON Alumno.ID_usuario = UsuarioAlumno.ID_usuario
+    INNER JOIN Usuario AS UsuarioProfesor ON Profesor.ID_usuario = UsuarioProfesor.ID_usuario;
 
 CREATE VIEW VistaAsistenciaAlumnos AS
 SELECT
@@ -172,12 +174,73 @@ SELECT
     Justificacion.mensaje AS Justificacion
 FROM
     Asistencia
-    LEFT JOIN Justificacion ON Asistencia.ID_asistencia = AsistenciaJustificacion.ID_asistencia
-    LEFT JOIN AsistenciaJustificacion ON Justificacion.ID_justificacion = AsistenciaJustificacion.ID_justificacion
+    LEFT JOIN AsistenciaJustificacion ON Asistencia.ID_asistencia = AsistenciaJustificacion.ID_asistencia
+    LEFT JOIN Justificacion ON AsistenciaJustificacion.ID_justificacion = Justificacion.ID_justificacion
     INNER JOIN Alumno ON Asistencia.ID_alumno = Alumno.ID_usuario
     INNER JOIN Usuario ON Alumno.ID_usuario = Usuario.ID_usuario;
 
+CREATE VIEW VistaPromedioCalificacionesPorAsignatura AS
+SELECT
+    Asignatura.ID_asignatura AS ID_Asignatura,
+    Asignatura.nombre AS Nombre_Asignatura,
+    Alumno.ID_usuario AS ID_Alumno,
+    Usuario.username AS Nombre_Alumno,
+    AVG(Calificacion.calificacion) AS Promedio_Calificaciones
+FROM
+    Calificacion
+    INNER JOIN Alumno ON Calificacion.ID_usuario = Alumno.ID_usuario
+    INNER JOIN Evaluacion ON Calificacion.ID_evaluacion = Evaluacion.ID_evaluacion
+    INNER JOIN Asignatura ON Evaluacion.ID_asignatura = Asignatura.ID_asignatura
+    INNER JOIN Usuario ON Alumno.ID_usuario = Usuario.ID_usuario
+GROUP BY
+    Asignatura.ID_asignatura, Alumno.ID_usuario;
+
+CREATE VIEW VistaUsuariosActivosInactivos AS
+SELECT
+    Usuario.ID_usuario AS ID_Usuario,
+    Usuario.username AS Nombre_Usuario,
+    Usuario.email AS Correo_Electronico,
+    CASE
+        WHEN Usuario.is_active = 1 THEN 'Activo'
+        ELSE 'Inactivo'
+    END AS Estado_Usuario
+FROM
+    Usuario;
+
+CREATE VIEW VistaMaterialesEducativosPorAsignatura AS
+SELECT
+    Asignatura.ID_asignatura AS ID_Asignatura,
+    Asignatura.nombre AS Nombre_Asignatura,
+    Material.titulo AS Titulo_Material,
+    Material.descripcion AS Descripcion_Material,
+    Material.fecha_publicacion AS Fecha_Publicacion,
+    Profesor.ID_usuario AS ID_Profesor,
+    Usuario.username AS Nombre_Profesor
+FROM
+    Material
+    INNER JOIN Asignatura ON Material.ID_asignatura = Asignatura.ID_asignatura
+    INNER JOIN Profesor ON Material.ID_profesor = Profesor.ID_usuario
+    INNER JOIN Usuario ON Profesor.ID_usuario = Usuario.ID_usuario;
+
+CREATE VIEW VistaEvaluacionesPendientesPorAsignatura AS
+SELECT
+    Asignatura.ID_asignatura AS ID_Asignatura,
+    Asignatura.nombre AS Nombre_Asignatura,
+    Evaluacion.ID_evaluacion AS ID_Evaluacion,
+    Evaluacion.titulo AS Titulo_Evaluacion,
+    Evaluacion.fecha_inicio AS Fecha_Inicio,
+    Evaluacion.fecha_termino AS Fecha_Termino,
+    Evaluacion.tipo AS Tipo_Evaluacion
+FROM
+    Evaluacion
+    INNER JOIN Asignatura ON Evaluacion.ID_asignatura = Asignatura.ID_asignatura
+WHERE
+    Evaluacion.fecha_termino >= CURRENT_DATE();
+
+
 -- Creación de funciones
+
+DELIMITER $$
 
 CREATE FUNCTION CalcularPromedioAlumno(ID_Alumno INTEGER)
 RETURNS FLOAT
@@ -188,7 +251,7 @@ BEGIN
     FROM Calificacion
     WHERE ID_usuario = ID_Alumno;
     RETURN promedio;
-END;
+END $$
 
 CREATE FUNCTION ObtenerEstadoAsistencia(ID_Alumno INTEGER, Fecha DATE)
 RETURNS VARCHAR(2)
@@ -199,7 +262,9 @@ BEGIN
     FROM Asistencia
     WHERE ID_alumno = ID_Alumno AND dia = Fecha;
     RETURN estado_asistencia;
-END;
+END $$
+
+DELIMITER ;
 
 -- Creación de stored procedures
 
@@ -227,7 +292,7 @@ END;
 -- Creación de triggers
 
 CREATE TRIGGER ActualizarFechaUltimaModificacionAnuncio
-AFTER UPDATE ON Anuncio
+BEFORE UPDATE ON Anuncio
 FOR EACH ROW
 BEGIN
     SET NEW.last_updated = CURRENT_TIMESTAMP;

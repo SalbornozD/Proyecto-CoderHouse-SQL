@@ -3,6 +3,8 @@ INSERT INTO Usuario (username, email, password, is_active, is_superuser) VALUES
 ('jdoe', 'jdoe@gmail.com', 'password123', TRUE, FALSE),
 ('asmith', 'asmith@gmail.com', 'password456', TRUE, FALSE),
 ('tparent', 'tparent@gmail.com', 'password789', TRUE, FALSE);
+('alumno1', 'alumno1@gmail.com', 'passwordalumno1', TRUE, FALSE)
+('alumno2', 'alumno2@gmail.com', 'passwordalumno2', TRUE, FALSE);
 
 -- Inserción de datos en la tabla Profesor
 INSERT INTO Profesor (ID_usuario) VALUES
